@@ -2,7 +2,7 @@
 
 简单、优雅的分布式锁工具包 | [dahaoshen.com](https://dahaoshen.com)
 
-[![CI](https://github.com/dahaoshen/max-lock/actions/workflows/ci.yml/badge.svg)](https://github.com/dahaoshen/max-lock/actions)
+[![CI](https://github.com/dhslegen/max-lock/actions/workflows/ci.yml/badge.svg)](https://github.com/dhslegen/max-lock/actions)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 ## 特性

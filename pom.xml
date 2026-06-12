@@ -25,9 +25,9 @@
         </developer>
     </developers>
     <scm>
-        <connection>scm:git:https://github.com/dahaoshen/max-lock.git</connection>
-        <developerConnection>scm:git:git@github.com:dahaoshen/max-lock.git</developerConnection>
-        <url>https://github.com/dahaoshen/max-lock</url>
+        <connection>scm:git:https://github.com/dhslegen/max-lock.git</connection>
+        <developerConnection>scm:git:git@github.com:dhslegen/max-lock.git</developerConnection>
+        <url>https://github.com/dhslegen/max-lock</url>
     </scm>
 
     <modules>
