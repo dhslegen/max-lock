@@ -70,6 +70,10 @@ public class LockException extends RuntimeException {
         return new LockException(Type.INVALID_CONFIG, null, message);
     }
 
+    public static LockException invalidConfig(String message, Throwable cause) {
+        return new LockException(Type.INVALID_CONFIG, null, message, cause);
+    }
+
     public static LockException executionFailed(String lockKey, Throwable cause) {
         String reason = cause == null ? "未知原因" : cause.getMessage();
         return new LockException(Type.EXECUTION_FAILED, lockKey, "锁内业务执行异常: " + reason, cause);
