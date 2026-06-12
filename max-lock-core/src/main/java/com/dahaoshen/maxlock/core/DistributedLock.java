@@ -42,7 +42,11 @@ public interface DistributedLock {
 
     // ==================== 函数式 API（default） ====================
 
-    /** 阻塞获取锁并执行动作，结束后自动释放 */
+    /**
+     * 阻塞获取锁并执行动作，结束后自动释放。
+     * <p>本方法阻塞直至获取锁，<b>忽略 {@code spec.waitTime}</b>；
+     * 需要限时尝试请改用 {@link #tryExecute(LockSpec, Callable, Supplier)}。
+     */
     default <T> T execute(LockSpec spec, Callable<T> action) {
         LockHandle handle = lock(spec);
         try {

@@ -11,7 +11,7 @@
 - **函数式 API**：`execute` / `tryExecute` 自动管理锁生命周期，不可能忘记释放
 - **@Lock 注解**：声明式加锁，SpEL 动态 key
 - **自动降级**：有 Redisson 用 Redis 锁，没有则本地 JVM 锁兜底（启动告警）
-- **Java 8 基线**：同时支持 Spring Boot 2.x 与 3.x
+- **Java 8 基线**：核心与 Boot 2 starter 编译为 Java 8 字节码，同时支持 Spring Boot 2.x 与 3.x（`spring-boot3-starter` 因 Boot 3 要求需 Java 17）
 
 ## 快速开始
 
@@ -38,6 +38,8 @@ Spring Boot 2.x 将 starter 换为 `max-lock-boot-starter`。
 @Lock(key = "order:#{#orderId}", waitTime = 3, timeoutMessage = "订单处理中，请稍后")
 public void process(Long orderId) { ... }
 ```
+
+> `waitTime` 默认 `10`（秒）：缺省即"限时等待 10 秒，获取失败抛超时异常"。设为 `-1` 表示阻塞等待，`0` 表示立即尝试。
 
 ### 编程式
 
