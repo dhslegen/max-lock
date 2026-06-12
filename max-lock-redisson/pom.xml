@@ -11,6 +11,24 @@
     <name>max-lock-redisson</name>
     <description>max-lock 的 Redisson（Redis）实现</description>
 
+    <build>
+        <plugins>
+            <!-- *IT.java 为 Testcontainers 集成测试，按 Maven 约定由 failsafe 在 integration-test 阶段运行 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
     <dependencies>
         <dependency>
             <groupId>com.dahaoshen</groupId>
