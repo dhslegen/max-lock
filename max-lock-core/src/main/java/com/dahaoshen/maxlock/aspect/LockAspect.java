@@ -9,6 +9,7 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.core.annotation.AnnotationUtils;
 
 import java.time.Duration;
 import java.util.concurrent.Callable;
@@ -61,7 +62,7 @@ public class LockAspect {
         if (lock != null) {
             return lock;
         }
-        Lock classLevel = point.getTarget().getClass().getDeclaredAnnotation(Lock.class);
+        Lock classLevel = AnnotationUtils.findAnnotation(point.getTarget().getClass(), Lock.class);
         if (classLevel == null) {
             throw LockException.invalidConfig("未找到 @Lock 注解");
         }

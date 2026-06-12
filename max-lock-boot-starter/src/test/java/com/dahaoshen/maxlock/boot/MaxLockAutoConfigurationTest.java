@@ -88,4 +88,14 @@ class MaxLockAutoConfigurationTest {
         runner.withPropertyValues("max.lock.provider=redisson")
                 .run(ctx -> assertThat(ctx.getStartupFailure()).isNotNull());
     }
+
+    @Test
+    void 有Redisson类但无RedissonClientBean时降级本地JVM锁() {
+        // RedissonClient 类在 classpath（redisson 为 test 依赖），但不注册 Bean
+        // RedissonLockConfiguration 激活，ObjectProvider 为空 → 降级为 LocalJvmDistributedLock
+        runner.run(ctx -> {
+            assertThat(ctx).hasSingleBean(DistributedLock.class);
+            assertThat(ctx.getBean(DistributedLock.class)).isInstanceOf(LocalJvmDistributedLock.class);
+        });
+    }
 }

@@ -2,14 +2,12 @@ package com.dahaoshen.maxlock.boot;
 
 import com.dahaoshen.maxlock.aspect.LockAspect;
 import com.dahaoshen.maxlock.core.DistributedLock;
-import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -23,11 +21,9 @@ import org.springframework.context.annotation.Configuration;
  * @author zhaowenhao
  * @since 2026-06-12
  */
-@Slf4j
 @Configuration(proxyBeanMethods = false)
 @AutoConfigureAfter(MaxLockAutoConfiguration.class)
 @ConditionalOnClass(ProceedingJoinPoint.class)
-@EnableConfigurationProperties(MaxLockProperties.class)
 @ConditionalOnProperty(prefix = MaxLockProperties.PREFIX, name = "aspect-enabled",
         havingValue = "true", matchIfMissing = true)
 public class MaxLockAspectAutoConfiguration {
