@@ -18,6 +18,11 @@ class MaxLockAutoConfigurationTest {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(MaxLockAutoConfiguration.class));
 
+    private final ApplicationContextRunner runnerWithAspect = new ApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(
+                    MaxLockAutoConfiguration.class,
+                    MaxLockAspectAutoConfiguration.class));
+
     @Test
     void 无Redisson类时降级本地JVM锁() {
         runner.withClassLoader(new FilteredClassLoader(RedissonClient.class))
@@ -52,8 +57,8 @@ class MaxLockAutoConfigurationTest {
 
     @Test
     void 默认装配LockAspect_可通过配置关闭() {
-        runner.run(ctx -> assertThat(ctx).hasSingleBean(LockAspect.class));
-        runner.withPropertyValues("max.lock.aspect-enabled=false")
+        runnerWithAspect.run(ctx -> assertThat(ctx).hasSingleBean(LockAspect.class));
+        runnerWithAspect.withPropertyValues("max.lock.aspect-enabled=false")
                 .run(ctx -> assertThat(ctx).doesNotHaveBean(LockAspect.class));
     }
 
@@ -65,5 +70,22 @@ class MaxLockAutoConfigurationTest {
                     assertThat(ctx).hasSingleBean(DistributedLock.class);
                     assertThat(ctx.getBean(DistributedLock.class)).isSameAs(custom);
                 });
+    }
+
+    @Test
+    void provider为none但用户提供DistributedLock时仍装配切面() {
+        runnerWithAspect
+                .withPropertyValues("max.lock.provider=none")
+                .withBean("customLock", DistributedLock.class, LocalJvmDistributedLock::new)
+                .run(ctx -> {
+                    assertThat(ctx).hasSingleBean(DistributedLock.class);
+                    assertThat(ctx).hasSingleBean(LockAspect.class);
+                });
+    }
+
+    @Test
+    void provider为redisson但无RedissonClient时启动失败() {
+        runner.withPropertyValues("max.lock.provider=redisson")
+                .run(ctx -> assertThat(ctx.getStartupFailure()).isNotNull());
     }
 }

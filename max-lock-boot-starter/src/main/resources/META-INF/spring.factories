@@ -1,2 +1,3 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-com.dahaoshen.maxlock.boot.MaxLockAutoConfiguration
+com.dahaoshen.maxlock.boot.MaxLockAutoConfiguration,\
+com.dahaoshen.maxlock.boot.MaxLockAspectAutoConfiguration
