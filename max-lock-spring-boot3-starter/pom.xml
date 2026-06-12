@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.dahaoshen</groupId>
+        <artifactId>max-lock-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <artifactId>max-lock-spring-boot3-starter</artifactId>
+    <name>max-lock-spring-boot3-starter</name>
+    <description>max-lock Spring Boot 3.x 自动装配</description>
+
+    <properties>
+        <maven.compiler.release>17</maven.compiler.release>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot3.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.dahaoshen</groupId>
+            <artifactId>max-lock-core</artifactId>
+            <!-- core 自带的 Spring 5 optional 依赖不传递，由 Boot 3 提供 Spring 6 -->
+        </dependency>
+        <dependency>
+            <groupId>com.dahaoshen</groupId>
+            <artifactId>max-lock-redisson</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+        <!-- 测试 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
