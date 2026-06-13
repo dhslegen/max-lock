@@ -205,6 +205,13 @@
                                 <id>sign-artifacts</id>
                                 <phase>verify</phase>
                                 <goals><goal>sign</goal></goals>
+                                <configuration>
+                                    <!-- gpg 2.1+ 非交互签名：loopback 模式从 settings.xml 的 gpg.passphrase 取口令 -->
+                                    <gpgArguments>
+                                        <arg>--pinentry-mode</arg>
+                                        <arg>loopback</arg>
+                                    </gpgArguments>
+                                </configuration>
                             </execution>
                         </executions>
                     </plugin>
