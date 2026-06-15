@@ -36,7 +36,6 @@
         <dependency>
             <groupId>com.dahaoshen</groupId>
             <artifactId>max-lock-redisson</artifactId>
-            <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -50,11 +49,10 @@
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
         </dependency>
-        <!-- redisson：编译期需要 @ConditionalOnClass(RedissonClient.class)，optional 不传递给用户 -->
+        <!-- redisson：作为 max-lock 内部分布式锁组件随 starter 传递，运行时按配置探测决定是否启用 -->
         <dependency>
             <groupId>org.redisson</groupId>
             <artifactId>redisson</artifactId>
-            <optional>true</optional>
         </dependency>
         <!-- 测试 -->
         <dependency>

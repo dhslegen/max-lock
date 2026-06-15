@@ -2,36 +2,33 @@ package com.dahaoshen.maxlock.boot3;
 
 import com.dahaoshen.maxlock.core.DistributedLock;
 import com.dahaoshen.maxlock.local.LocalJvmDistributedLock;
+import com.dahaoshen.maxlock.redisson.RedissonAutoConfigurer;
 import com.dahaoshen.maxlock.redisson.RedissonDistributedLock;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.AnyNestedCondition;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
+import org.springframework.core.env.Environment;
 
 /**
- * max-lock 自动装配（Spring Boot 3.x）：
+ * max-lock 自动装配（Spring Boot 3.x，约定优于配置）：
  * <ol>
- *   <li>有 RedissonClient Bean 且 provider ∈ {auto, redisson} → Redis 分布式锁</li>
- *   <li>否则 provider ∈ {auto, local} → 本地 JVM 锁（auto 降级时告警）</li>
- *   <li>provider = none → 不装配任何锁（切面由 {@link MaxLockAspectAutoConfiguration} 按 Bean 存在性决定）</li>
+ *   <li>用户已声明 RedissonClient Bean → 直接复用，启用 Redis 分布式锁</li>
+ *   <li>否则 provider ∈ {auto, redisson} 且存在 Redis 连接配置 → 内部自建 Redisson 客户端并探测连通</li>
+ *   <li>探测连通 → Redis 分布式锁；探测失败（auto）→ 醒目告警并回退本地 JVM 锁；探测失败（redisson）→ 启动报错</li>
+ *   <li>无任何 Redis 配置（auto）/ provider=local → 本地 JVM 锁</li>
+ *   <li>provider=none → 不装配任何锁（切面由 {@link MaxLockAspectAutoConfiguration} 按 Bean 存在性决定）</li>
  * </ol>
  * <p>
- * 设计说明：RedissonLockConfiguration 和 LocalLockConfiguration 作为嵌套配置类，
- * 通过类级别的 @Conditional(AnyNestedCondition) 在 PARSE_CONFIGURATION 阶段按 provider 过滤，
- * 然后在 Bean 方法上用 @ConditionalOnMissingBean 互斥。
- * RedissonLockConfiguration 中使用 ObjectProvider 而非 @ConditionalOnBean 避免用户 Bean 可见性问题。
- * 切面装配已迁移至 {@link MaxLockAspectAutoConfiguration}，以 DistributedLock Bean 存在为条件，
- * 支持用户在 provider=none 时自定义 DistributedLock Bean 并自动激活切面。
+ * redisson 与 max-lock-redisson 已作为 starter 的非可选传递依赖随包引入，因此 RedissonClient 类必然在
+ * classpath；是否真正启用 Redis 锁完全由「配置 + 连通探测」自动决策，使用者无需手工声明任何锁相关依赖或 Bean。
  *
  * @author zhaowenhao
  * @since 2026-06-12
@@ -39,67 +36,75 @@ import org.springframework.context.annotation.Import;
 @Slf4j
 @AutoConfiguration
 @EnableConfigurationProperties(MaxLockProperties.class)
-@Import({MaxLockAutoConfiguration.RedissonLockConfiguration.class,
-        MaxLockAutoConfiguration.LocalLockConfiguration.class})
+// 在 redisson-spring-boot-starter 之后装配：确保 @ConditionalOnMissingBean(RedissonClient) 能看到消费方
+// 已有的 RedissonClient 并复用，避免自建客户端导致容器中出现重复 Bean。name 形式在该类缺失时安全退化。
+@AutoConfigureAfter(name = "org.redisson.spring.starter.RedissonAutoConfiguration")
 public class MaxLockAutoConfiguration {
 
     /**
-     * Redisson 锁配置：需要 RedissonClient 类在 classpath，provider 为 auto 或 redisson。
-     * 通过 ObjectProvider 运行时获取 RedissonClient，有则装配 Redis 锁，无则降级本地锁（仅 auto）。
+     * 内部 Redisson 客户端：仅在 provider ∈ {auto, redisson} 且用户未自定义 RedissonClient Bean 时构建。
+     * 依据显式配置解析连接并探测；无配置或连接失败返回 {@code null}（Spring NullBean，不触发 shutdown）。
      */
-    @Configuration(proxyBeanMethods = false)
-    @ConditionalOnClass({RedissonClient.class, RedissonDistributedLock.class})
+    @Bean(destroyMethod = "shutdown")
+    @ConditionalOnMissingBean(RedissonClient.class)
     @Conditional(RedissonProviderCondition.class)
-    static class RedissonLockConfiguration {
-
-        @Bean
-        @ConditionalOnMissingBean(DistributedLock.class)
-        public DistributedLock redissonDistributedLock(ObjectProvider<RedissonClient> redissonClientProvider,
-                                                       MaxLockProperties properties) {
-            RedissonClient client = redissonClientProvider.getIfAvailable();
-            if (client != null) {
-                log.info("max-lock: 装配 RedissonDistributedLock");
-                return new RedissonDistributedLock(client);
-            }
-            if (properties.getProvider() == MaxLockProperties.Provider.REDISSON) {
+    public RedissonClient maxLockRedissonClient(MaxLockProperties properties, Environment environment) {
+        MaxLockProperties.Redis redis = properties.getRedis();
+        boolean forceRedisson = properties.getProvider() == MaxLockProperties.Provider.REDISSON;
+        RedissonAutoConfigurer.Resolved resolved = RedissonAutoConfigurer.resolve(
+                redis.isEnabled(), redis.getAddress(), redis.getHost(), redis.getPort(),
+                redis.getPassword(), redis.getDatabase(), redis.getProbeTimeout(),
+                environment::getProperty);
+        if (resolved == null) {
+            if (forceRedisson) {
                 throw new IllegalStateException(
-                        "max-lock: provider=redisson 但未找到 RedissonClient Bean，请检查 Redisson 配置");
+                        "max-lock: provider=redisson 但未找到任何 Redis 连接配置（max.lock.redis.* 或 spring.data.redis.*）");
             }
-            // provider=auto 但无 RedissonClient Bean，降级为本地 JVM 锁
-            log.warn("max-lock: RedissonClient 类在 classpath 但无 Bean，降级为本地 JVM 锁——" +
-                    "集群部署时不具备分布式互斥语义！如需 Redis 锁请配置 RedissonClient Bean");
-            return new LocalJvmDistributedLock();
+            log.info("max-lock: 未配置 Redis 连接信息，将使用本地 JVM 锁");
+            return null;
         }
+        RedissonClient client = RedissonAutoConfigurer.tryConnect(resolved);
+        if (client == null) {
+            if (forceRedisson) {
+                throw new IllegalStateException(
+                        "max-lock: provider=redisson 但无法连接 Redis（" + resolved.display() + "），请检查 Redis 可用性与连接配置");
+            }
+            log.warn("\n========================================================================\n"
+                            + "  ⚠ max-lock 警告：已配置 Redis（{}）但连接失败，自动回退到【本地 JVM 锁】！\n"
+                            + "  ⚠ 集群/多实例部署下本地锁不具备跨进程互斥语义，存在并发安全风险。\n"
+                            + "  ⚠ 请检查 Redis 是否可达、地址/密码/库号是否正确。\n"
+                            + "========================================================================",
+                    resolved.display());
+            return null;
+        }
+        log.info("max-lock: 已连接 Redis（{}），启用 Redis 分布式锁", resolved.display());
+        return client;
     }
 
     /**
-     * 本地 JVM 锁配置：
-     * <ul>
-     *   <li>provider=local：强制本地锁</li>
-     *   <li>provider=auto 且 RedissonClient 类不在 classpath：自动降级</li>
-     * </ul>
+     * DistributedLock Bean：有可用 RedissonClient（用户自定义或内部自建）则 Redis 锁，否则本地 JVM 锁。
+     * provider=none 不装配（由 {@link NotNoneProviderCondition} 过滤）。
      */
-    @Configuration(proxyBeanMethods = false)
-    @Conditional(LocalActivationCondition.class)
-    static class LocalLockConfiguration {
-
-        @Bean
-        @ConditionalOnMissingBean(DistributedLock.class)
-        public DistributedLock localJvmDistributedLock(MaxLockProperties properties) {
-            if (properties.getProvider() == MaxLockProperties.Provider.AUTO) {
-                log.warn("max-lock: 未检测到 Redisson，降级为本地 JVM 锁——集群部署时不具备分布式互斥语义！" +
-                        "如需 Redis 锁请引入 max-lock-redisson 与 Redisson 依赖");
-            } else {
-                log.info("max-lock: 装配 LocalJvmDistributedLock");
-            }
-            return new LocalJvmDistributedLock();
+    @Bean
+    @ConditionalOnMissingBean(DistributedLock.class)
+    @Conditional(NotNoneProviderCondition.class)
+    public DistributedLock maxDistributedLock(ObjectProvider<RedissonClient> redissonClientProvider,
+                                              MaxLockProperties properties) {
+        // provider=local 强制本地锁，忽略任何（用户自定义或内部自建的）RedissonClient
+        RedissonClient client = properties.getProvider() == MaxLockProperties.Provider.LOCAL
+                ? null : redissonClientProvider.getIfAvailable();
+        if (client != null) {
+            log.info("max-lock: 装配 RedissonDistributedLock（Redis 分布式锁）");
+            return new RedissonDistributedLock(client);
         }
+        log.info("max-lock: 装配 LocalJvmDistributedLock（本地 JVM 锁）");
+        return new LocalJvmDistributedLock();
     }
 
     /** provider ∈ {auto(缺省), redisson} */
     static class RedissonProviderCondition extends AnyNestedCondition {
         RedissonProviderCondition() {
-            super(ConfigurationPhase.PARSE_CONFIGURATION);
+            super(ConfigurationPhase.REGISTER_BEAN);
         }
 
         @ConditionalOnProperty(prefix = MaxLockProperties.PREFIX, name = "provider",
@@ -110,24 +115,20 @@ public class MaxLockAutoConfiguration {
         static class OnRedisson { }
     }
 
-    /**
-     * 本地锁激活条件：
-     * <ul>
-     *   <li>provider=local</li>
-     *   <li>或 provider=auto 且 RedissonClient 类不在 classpath</li>
-     * </ul>
-     */
-    static class LocalActivationCondition extends AnyNestedCondition {
-        LocalActivationCondition() {
-            super(ConfigurationPhase.PARSE_CONFIGURATION);
+    /** provider ≠ none，即 ∈ {auto(缺省), redisson, local} */
+    static class NotNoneProviderCondition extends AnyNestedCondition {
+        NotNoneProviderCondition() {
+            super(ConfigurationPhase.REGISTER_BEAN);
         }
-
-        @ConditionalOnProperty(prefix = MaxLockProperties.PREFIX, name = "provider", havingValue = "local")
-        static class OnLocal { }
 
         @ConditionalOnProperty(prefix = MaxLockProperties.PREFIX, name = "provider",
                 havingValue = "auto", matchIfMissing = true)
-        @ConditionalOnMissingClass("org.redisson.api.RedissonClient")
-        static class OnAutoWithoutRedisson { }
+        static class OnAuto { }
+
+        @ConditionalOnProperty(prefix = MaxLockProperties.PREFIX, name = "provider", havingValue = "redisson")
+        static class OnRedisson { }
+
+        @ConditionalOnProperty(prefix = MaxLockProperties.PREFIX, name = "provider", havingValue = "local")
+        static class OnLocal { }
     }
 }

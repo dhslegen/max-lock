@@ -10,27 +10,23 @@
 - **LockSpec 参数对象**：一个不可变对象表达"公平/等待/持有/前缀"全部维度，告别重载爆炸
 - **函数式 API**：`execute` / `tryExecute` 自动管理锁生命周期，不可能忘记释放
 - **@Lock 注解**：声明式加锁，SpEL 动态 key
-- **自动降级**：有 Redisson 用 Redis 锁，没有则本地 JVM 锁兜底（启动告警）
+- **自动决策**：按配置探测 Redis 连通性——能连通用 Redis 锁，连不通则醒目告警并回退本地 JVM 锁（兜底，应用不崩溃）
 - **Java 8 基线**：核心与 Boot 2 starter 编译为 Java 8 字节码，同时支持 Spring Boot 2.x 与 3.x（`spring-boot3-starter` 因 Boot 3 要求需 Java 17）
 
 ## 快速开始
 
 ```xml
-<!-- Spring Boot 3.x -->
+<!-- Spring Boot 3.x：唯一需要引入的依赖 -->
 <dependency>
     <groupId>com.dahaoshen</groupId>
     <artifactId>max-lock-spring-boot3-starter</artifactId>
-    <version>1.0.0</version>
-</dependency>
-<!-- 需要 Redis 锁时再加 -->
-<dependency>
-    <groupId>com.dahaoshen</groupId>
-    <artifactId>max-lock-redisson</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
 </dependency>
 ```
 
 Spring Boot 2.x 将 starter 换为 `max-lock-boot-starter`。
+
+> 自 1.1.0 起，`max-lock-redisson` 与 `redisson` 已作为 starter 的非可选传递依赖随包引入，**无需再单独声明，也无需手写 `RedissonClient` Bean**。是否启用 Redis 锁由「配置 + 连通探测」自动决策（见下方配置）；已有自定义 `RedissonClient` Bean（如 redisson-spring-boot-starter）则自动复用、互不冲突。
 
 ### 注解式
 
@@ -67,10 +63,25 @@ try (LockHandle handle = lock.lock("migration")) {
 ```yaml
 max:
   lock:
-    provider: auto        # auto / redisson / local / none
+    # auto(默认)：有可用 Redis 则 Redis 锁，否则本地 JVM 锁
+    # redisson：强制 Redis 锁，无连接配置或连不通则启动报错
+    # local：强制本地 JVM 锁；none：不装配任何锁
+    provider: auto
     key-prefix: "LOCK"    # @Lock 未指定 prefix 时的全局默认前缀
     aspect-enabled: true  # @Lock 切面开关
+    # Redis 连接（仅 provider ∈ {auto, redisson} 生效）：按配置探测，不默认探本机。
+    # 已有自定义 RedissonClient Bean 时本段被忽略（直接复用该 Bean）。
+    redis:
+      enabled: true                    # 关掉则即便有配置也不启用 Redis 锁
+      address: redis://127.0.0.1:6379  # 完整地址，优先级高于 host/port
+      # host: 127.0.0.1                # 与 port 配合；address 未配置时使用
+      # port: 6379
+      # password:                      # 未配置时回退 spring.data.redis.password
+      # database: 0                    # 未配置时回退 spring.data.redis.database
+      # probe-timeout: 1000            # 连通探测超时(ms)
 ```
+
+> 地址解析优先级：`max.lock.redis.address` &gt; `max.lock.redis.host:port` &gt; `spring.data.redis.host:port`。三者均未配置时，`auto` 直接使用本地 JVM 锁。
 
 ## 模块
 
